@@ -110,12 +110,19 @@ def test_does_not_retry_client_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls["n"] == 1  # a 400 is the caller's fault, never retried
 
 
-def test_auto_generates_idempotency_key() -> None:
-    seen: dict = {}
+def test_default_idempotency_key_is_deterministic_across_processes() -> None:
+    """The same logical request must map to the same key on any machine at any
+    time, so the API dedupes retries even across process restarts. A random
+    per-call key would only dedupe within one call."""
+    keys: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen["idem"] = request.headers.get("idempotency-key")
+        keys.append(request.headers.get("idempotency-key"))
         return httpx.Response(201, json={"id": "v", "result": "verified"})
 
     _client(handler).verify_ticket(operation_id="op", agent_id="a", ticket_id="t")
-    assert seen["idem"]  # generated even though the caller passed none
+    _client(handler).verify_ticket(operation_id="op", agent_id="a", ticket_id="t")
+    assert keys[0] and keys[0] == keys[1]  # identical request -> identical key
+
+    _client(handler).verify_ticket(operation_id="op2", agent_id="a", ticket_id="t")
+    assert keys[2] != keys[0]  # different request -> different key

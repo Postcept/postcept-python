@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json as jsonlib
 import random
 import time
-import uuid
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import httpx
+
+if TYPE_CHECKING:
+    from postcept.guard import GuardedResult
+
+_T = TypeVar("_T")
 
 DEFAULT_BASE_URL = "https://api.postcept.com"
 
@@ -20,6 +27,13 @@ def _backoff_seconds(attempt: int, response: httpx.Response | None) -> float:
         if header and header.isdigit():
             return min(float(header), 30.0)
     return random.random() * min(30.0, 0.2 * 2**attempt)
+
+
+def _request_digest(body: dict[str, Any]) -> str:
+    """Deterministic idempotency key for a request body: identical logical requests
+    map to the same key on any machine, at any time."""
+    canonical = jsonlib.dumps(body, sort_keys=True, separators=(",", ":"))
+    return "req-" + hashlib.sha256(canonical.encode()).hexdigest()[:40]
 
 
 class PostceptError(Exception):
@@ -144,6 +158,28 @@ class Postcept:
         """The org's Verified Completion Rate (verified / claimed)."""
         return self._request("GET", "/v1/metrics/vcr")
 
+    # --- guarded actions ---
+
+    def guard_refund(self, action: Callable[[], _T], /, **kwargs: Any) -> GuardedResult[_T]:
+        """Run ``action`` (your refund, your credentials), then verify it. Returns a
+        typed result with a customer-safe status. See postcept.guard.guard. All
+        verify_refund keyword arguments apply."""
+        from postcept.guard import guard as _guard
+
+        return _guard(action, lambda: self.verify_refund(**kwargs))
+
+    def guard_cancellation(self, action: Callable[[], _T], /, **kwargs: Any) -> GuardedResult[_T]:
+        """Run a cancellation in your code, then verify it. See guard_refund."""
+        from postcept.guard import guard as _guard
+
+        return _guard(action, lambda: self.verify_cancellation(**kwargs))
+
+    def guard_ticket(self, action: Callable[[], _T], /, **kwargs: Any) -> GuardedResult[_T]:
+        """Run a ticket resolution in your code, then verify it. See guard_refund."""
+        from postcept.guard import guard as _guard
+
+        return _guard(action, lambda: self.verify_ticket(**kwargs))
+
     # --- internals ---
 
     def _create_verification(
@@ -155,14 +191,18 @@ class Postcept:
         connector: str | None = None,
         test: bool | None = None,
     ) -> dict[str, Any]:
-        # Auto-generate an idempotency key so a retried POST is deduped by the API
-        # instead of creating a second verification.
-        headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         body: dict[str, Any] = {"operation_id": operation_id, "agent_id": agent_id, "claim": claim}
         if connector is not None:
             body["connector"] = connector
         if test is not None:
             body["test"] = test
+        # Default idempotency key: a digest of the request itself, so the SAME
+        # logical request is deduped by the API across retries and across process
+        # restarts. (A random per-call key only dedupes within one call and would
+        # falsely suggest cross-process protection.) Re-submitting an identical
+        # request returns the original verification. Pass an explicit
+        # idempotency_key for a fresh one, or use reconcile to re-check.
+        headers = {"Idempotency-Key": idempotency_key or _request_digest(body)}
         return self._request("POST", "/v1/verifications", json=body, headers=headers)
 
     def _request(
