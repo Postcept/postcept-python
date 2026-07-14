@@ -23,6 +23,6 @@ jobs:
       # PyPI trusted publishing signs and attaches PEP 740 attestations. No token
       # is stored, and PyPI verifies the release came from this workflow.
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
         with:
           attestations: true
