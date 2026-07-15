@@ -46,7 +46,7 @@ class PostceptError(Exception):
 
 
 class Postcept:
-    """Submit Proof-of-Completion verifications for your agents' actions.
+    """Verify your agents' actions against the system of record.
 
     Authenticate with an organization API key (``pcpt_sk_...``):
 

@@ -1,4 +1,4 @@
-"""Python SDK for Postcept: Proof-of-Completion for AI agents."""
+"""Python SDK for Postcept: outcome verification for AI agents."""
 
 from postcept._client import DEFAULT_BASE_URL, Postcept, PostceptError
 from postcept.guard import GuardedResult, customer_status, guard

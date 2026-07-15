@@ -1,6 +1,6 @@
 # Postcept Python SDK
 
-Submit Proof-of-Completion verifications for your AI agents' high-risk actions.
+Verify your AI agents' high-risk actions against the system of record and get signed completion receipts back.
 
 ```bash
 pip install postcept
