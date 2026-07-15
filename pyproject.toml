@@ -1,6 +1,6 @@
 [project]
 name = "postcept"
-version = "0.3.1"
+version = "0.3.2"
 description = "Python client for the Postcept API. Outcome verification for AI agents: check high-risk agent actions against the system of record and get a signed completion receipt."
 readme = "README.md"
 requires-python = ">=3.9"
